@@ -8,10 +8,73 @@ function log(msg)
 var COLORS = 
 [
     // Black / White 
-    { background : "#ffffff", text : "#000000", headers : "#000000",  highlight : "#00ffff", graph_node : "rgba(50,50,50,1)", graph_label : "#dd4444" }
+    /*
+    { 
+        background : "#ffffff", 
+        text : "#000000", 
+        page_tag : "#000000",
+        headers : "#000000",  
+        headers_condensed : "#000000",
+        highlight : "#00ffff", 
+        graph_node : "rgba(50,50,50,1)", 
+        graph_label : "#dd4444", 
+        graph_stroke : "rgba(50,50,50,0.5)",
+    },
+    */
+    
+    // Yellow / Purple
+    { 
+        background : "#ffea49", 
+        text : "#210026", 
+        page_tag : "#210026",        
+        headers : "#210026",  
+        headers_condensed : "#ffffff",  
+        highlight : "#ffffff", 
+        graph_node : "#ffffff", 
+        graph_label : "#210026", 
+        graph_stroke : "rgba(50,50,50,0.5)"
+    },
+    
+    // Lavender 
+    { 
+        background : "#d9acd2", 
+        text : "#ffffff", 
+        page_tag : "#5d5370",        
+        headers : "#ffffff",  
+        headers_condensed : "#5d5370",  
+        highlight : "#ffffff", 
+        graph_node : "#5d5370", 
+        graph_label : "#ffffff", 
+        graph_stroke : "rgba(50,50,50,0.5)" },
+    
+    // Salmon
+    { 
+        background : "#fb8876", 
+        text : "#5d5370", 
+        page_tag : "#5d5370",        
+        headers : "#5d5370",  
+        headers_condensed : "#ffffff",  
+        highlight : "#ffffff", 
+        graph_node : "#5d5370", 
+        graph_label : "#ffffff", 
+        graph_stroke : "rgba(50,50,50,0.5)" 
+    },
+    
+    // Teal
+    { 
+        background : "#83d5d2", 
+        text : "#5d5370", 
+        page_tag : "#5d5370",        
+        headers : "#5d5370",  
+        headers_condensed : "#ffffff",  
+        highlight : "#ffffff", 
+        graph_node : "#5d5370", 
+        graph_label : "#ffffff", 
+        graph_stroke : "rgba(50,50,50,0.5)" 
+    },
 ];
 
-var $ColorScheme = COLORS[Math.random() * COLORS.length];
+var $ColorScheme = COLORS[Math.floor(Math.random() * COLORS.length)];
 
 var $TimeLoaded = new Date();
 var $TimerClock = null;
@@ -20,6 +83,7 @@ var $TimerDraw = null;
 var $NumUniqueWords = 0;
 var $NumUniqueTags = 0;
 var $NumJavascriptFiles = 0;
+var $NumCookies = 0;
 var $NumCSSFiles = 0;
 var $NumUniqueDomains = 0;
 
@@ -33,18 +97,22 @@ var $PageTagCounts = null;
 
 var $JavaScriptFilenames = [];
 var $CSSFilenames = [];
+var $CookieValues = {};
 
 var $StopWords = ["a", "able", "about", "across", "after", "all", "almost", "also", "am", "among", "an", "and", "any", "are", "as", "at", "be", "because", "been", "but", "by", "can", "cannot", "could", "dear", "did", "do", "does", "either", "else", "ever", "every", "for", "from", "get", "got", "had", "has", "have", "he", "her", "hers", "him", "his", "how", "however", "i", "if", "in", "into", "is", "it", "its", "just", "least", "let", "like", "likely", "may", "me", "might", "most", "must", "my", "neither", "no", "nor", "not", "of", "off", "often", "on", "only", "or", "other", "our", "own", "rather", "said", "say", "says", "she", "should", "since", "so", "some", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "would", "yet", "you", "your"];
 
 var $NumInterestingWords = 25;
 var $InterestingWords = [];
 
-var $IgnoreContentTags = ["STYLE", "SCRIPT", "EMBED", "IFRAME", "NOSCRIPT"];
+var $IgnoreContentTags = ["STYLE", "SCRIPT", "EMBED", "IFRAME", "NOSCRIPT", "HEAD", "HTML", "BODY"];
 
 var $PageTitle = "";
 var $PageDomain = "";
 
 var $PopoverHTML = "";
+
+var $GraphNodes = [];
+var $GraphMarginRight = 300;
 
 // Scratch containers for recursive function
 var linkDomains = [];
@@ -87,11 +155,11 @@ function mineTag(parentTag)
         {
             if (this.src)
             {
-                $NumJavascriptFiles += 1;
                 var components = this.src.split('/');
                 var fn = components[components.length - 1].replace(/\?.*/, "");
                 if ($JavaScriptFilenames.indexOf(fn) == -1)
                 {
+                    $NumJavascriptFiles += 1;
                     $JavaScriptFilenames.push(fn);
                 }
             }
@@ -102,11 +170,11 @@ function mineTag(parentTag)
                 this.rel.toLowerCase().trim() == "stylesheet" &&
                 this.href)
             {
-                $NumCSSFiles += 1;
                 var components = this.href.split('/');
                 var fn = components[components.length - 1].replace(/\?.*/, "");
                 if ($CSSFilenames.indexOf(fn) == -1)
                 {
+                    $NumCSSFiles += 1;
                     $CSSFilenames.push(fn);                    
                 }
             }            
@@ -149,21 +217,67 @@ function clearScratch()
     pageWords = [];   
 }
 
-function analyzePage()
+function reset()
 {
     clearScratch();
-    
-    clearInterval($TimerClock);    
-    clearInterval($TimerDraw);
-    
+
+    $NumUniqueWords = 0;
+    $NumUniqueTags = 0;
+    $NumCookies = 0;    
+    $NumJavascriptFiles = 0;
+    $NumCSSFiles = 0;
+    $NumUniqueDomains = 0;
+    $SortedPageWords = null;
+    $SortedPageTags = null;
+    $SortedLinkDomains = null;
+    $LinkDomainCounts = null;
+    $PageTagCounts = null;
+    $JavaScriptFilenames = [];
+    $CSSFilenames = [];
+    $InterestingWords = [];
+    $PageTitle = "";
+    $PageDomain = "";
+    $PopoverHTML = "";
     $NumJavascriptFiles = 0;
     $NumCSSFiles = 0;
     $JavaScriptFilenames = [];
     $CSSFilenames = [];
     $PopoverHTML = "";
-    $LinkDomainCounts = {};
+    $LinkDomainCounts = {};        
+    $GraphNodes = [];
+    $CookieValues = {};
+
+    $ColorScheme = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    clearInterval($TimerClock);    
+    clearInterval($TimerDraw);    
+}
+
+function parseCookies()
+{
+    $CookieValues = {};
+    $NumCookies = 0;
+    if (document.cookie && document.cookie != "")
+    {
+        var pairs = document.cookie.split(";");
+        for (var i=0; i<pairs.length; i++)
+        {
+          $NumCookies++;
+          var pair = pairs[i].split("=");
+          $CookieValues[pair[0]] = unescape(pair[1]);
+        }  
+    }
+}
+
+function analyzePage()
+{
+    closeFeltron();
+
+    pickStyle();
     
     mineTag($("*"));
+    
+    parseCookies();
 
     // Tags
     pageTags.sort(function(a,b)
@@ -222,14 +336,13 @@ function analyzePage()
         var word = $SortedPageWords[i];
         if ($StopWords.indexOf(word) == -1)
         {
-            if (word.length >= 3 &&
-                $InterestingWords.length < $NumInterestingWords)
+            if (word.length >= 3)
             {   
-                $InterestingWords.push(word)
-            }
-            else
-            {
-                break;
+                $InterestingWords.push(word)                
+                if ($InterestingWords.length >= $NumInterestingWords)
+                {
+                    break;
+                }
             }
         }
     }
@@ -239,13 +352,13 @@ function analyzePage()
     var $PageTitle = document.title || "Untitled";
     var $PageDomain = window.location.host.replace("www.", "");
     
-    $PopoverHTML = '<div id="feltron_ext">';
+    $PopoverHTML = '<div id="feltron_ext"><button id="fe_close_button">Close</button>';
     
-    log("Page Title: " + $PageTitle);
+    //log("Page Title: " + $PageTitle);
     $PopoverHTML += "<header>";
     $PopoverHTML += "<p>Where are you?</p>";
     $PopoverHTML += '<h1>' + $PageTitle + '</h1>';
-    log("Page Domain: " + $PageDomain);
+    //log("Page Domain: " + $PageDomain);
     $PopoverHTML += '<h2>' + $PageDomain + '</h2>';
     $PopoverHTML += "</header>";
 
@@ -255,18 +368,24 @@ function analyzePage()
     $PopoverHTML += '<ul id="fe_details">';
 
     // Col 1: Words
-    $PopoverHTML += '<li><div class="datapoint"><h3>unique words</h3><h3 class="condensed">' + convertNum($NumUniqueWords) + ' </h3>';
-    log("Num unique words: " + convertNum($NumUniqueWords));
-    log("Interesting Words: ");
-    log($InterestingWords);
-    $PopoverHTML += '<p>' + $InterestingWords.join(", ") + '</p>'; 
-    $PopoverHTML += '</div></li>';
+    $PopoverHTML += '<li>';
+    $PopoverHTML += '<div class="datapoint"><h3>unique words</h3><h3 class="condensed">' + convertNum($NumUniqueWords) + ' </h3></div>';
+    $PopoverHTML += '<div class="datapoint">';
+    $PopoverHTML += '<h3>interesting words</h3>';
+    $PopoverHTML += '<p>' + $InterestingWords.join(", ") + '</p></div>';     
+    $PopoverHTML += '<div class="datapoint"><h3>Time on page</h3><div id="fe_clock">:00</div></div>';        
+    
+    $PopoverHTML += '<div class="datapoint"><h3>plaid-o-meter</h3>';        
+    $PopoverHTML += '<canvas width="400" height="160" id="fe_plaid_canvas"></canvas>';
+    $PopoverHTML += '</div>';
+    
+    $PopoverHTML += '</li>';
     
     // Col 2: Tags
     $PopoverHTML += '<li><div class="datapoint bargraph"><h3>html tags</h3><h3 class="condensed">'+convertNum($NumUniqueTags)+'</h3>';
-    log("Num unique tags: " + convertNum($NumUniqueTags));
-    log("Sorted Tags: ");
-    log($SortedPageTags);
+    //log("Num unique tags: " + convertNum($NumUniqueTags));
+    //log("Sorted Tags: ");
+    //log($SortedPageTags);
     var maxTagCount = $PageTagCounts[$SortedPageTags[0]];
     var tagList = $SortedPageTags.map(function(tag){ 
         var amtPageTag = $PageTagCounts[tag] / maxTagCount;
@@ -277,32 +396,40 @@ function analyzePage()
     
     // Col 3: Domains
     $PopoverHTML += '<li><div class="datapoint"><h3>domains</h3><h3 class="condensed">'+convertNum($NumUniqueDomains)+'</h3>';
-    log("Num unique domains: " + convertNum($NumUniqueDomains));
-    log("Sorted Domains: ");
-    log($SortedLinkDomains);
+    //log("Num unique domains: " + convertNum($NumUniqueDomains));
+    //log("Sorted Domains: ");
+    //log($SortedLinkDomains);
     $PopoverHTML += '<p>' + $SortedLinkDomains.join(", ") + '</p></div>';     
-    $PopoverHTML += '<div class="datapoint"><div id="fe_clock"></div><h3>Time on page</h3></div>';
     $PopoverHTML += '</li>';
     
-    // Col 4: CSS & JS
-    $PopoverHTML += '<li><div class="datapoint"><h3>JavaScript files</h3><h3 class="condensed">'+convertNum($NumJavascriptFiles)+'</h3>';
-    log("Num JavaScript Files: " + $NumJavascriptFiles);
-    log("$JavaScriptFilenames: ");
-    log($JavaScriptFilenames);
+    // Col 4: CSS, JS, Cookies
+    $PopoverHTML += '<li>';
+    $PopoverHTML += '<div class="datapoint"><h3>cookies</h3><h3 class="condensed">'+ convertNum($NumCookies) +'</h3>';
+    $PopoverHTML += '<p>';
+    for (var cookieName in $CookieValues)
+    {
+        $PopoverHTML += cookieName + " : " + $CookieValues[cookieName] + "<br/>";
+    }
+    $PopoverHTML += '</p>';
+    $PopoverHTML += '</div>';
+    
+    $PopoverHTML += '<div class="datapoint"><h3>javascript files</h3><h3 class="condensed">'+convertNum($NumJavascriptFiles)+'</h3>';
     $PopoverHTML += '<p>' + $JavaScriptFilenames.join("<br/>") + '</p></div>';     
     
     $PopoverHTML += '<div class="datapoint"><h3>css files</h3><h3 class="condensed">'+ convertNum($NumCSSFiles) +'</h3>';
-    log("Num CSS Files: " + $NumCSSFiles);    
-    log("$CSSFilenames: ");
-    log($CSSFilenames);
     $PopoverHTML += '<p>' + $CSSFilenames.join("<br/>") + '</p>';         
-    $PopoverHTML += '</div></li>';
+    $PopoverHTML += '</div>';
+    $PopoverHTML += '</li>';
     $PopoverHTML += '</ul>';
     
     $PopoverHTML += '</div>'; // fe_details
     $PopoverHTML += "</div>"; // feltron_ext
     
     document.body.innerHTML += $PopoverHTML;
+    
+    document.getElementById('fe_close_button').onclick = function(){ closeFeltron(); };
+    
+    drawPlaid();
     
     createGraphData();
     
@@ -315,8 +442,15 @@ function analyzePage()
     }, 1000);
 }
 
-$GraphNodes = [];
-$GraphMarginRight = 300;
+function closeFeltron()
+{
+    reset();
+    var overlay = document.getElementById('feltron_ext');
+    if (overlay)
+    {
+        overlay.parentNode.removeChild(overlay);    
+    }
+}
 
 function createGraphData()
 {
@@ -348,7 +482,7 @@ function createGraphData()
         var linkCount = $LinkDomainCounts[node.domain];
         var scalarSize = (linkCount - minCount) / (maxCount - minCount);        
         node.radius = 6 + (100 * scalarSize);
-        node.color = "rgba(50,50,50,1)";
+        node.color = $ColorScheme['graph_node']; //"rgba(50,50,50,1)";
         node.posX = node.radius + (Math.random() * (canvasWidth - $GraphMarginRight - (node.radius * 2)));
         node.posY = node.radius + (Math.random() * (canvasHeight - (node.radius * 2)));
         
@@ -360,6 +494,94 @@ function createGraphData()
     // console.log("$GraphNodes.length " + $GraphNodes.length);
 }
 
+function drawPlaid()
+{
+    var canvas = document.getElementById("fe_plaid_canvas");
+    var context = canvas.getContext("2d");
+    var canvasWidth = $(canvas).width() * 2;
+    var canvasHeight = $(canvas).height() * 2;  
+    context.fillStyle = $ColorScheme['background'];
+    context.fillRect(0,0,canvasWidth,canvasHeight);    
+    
+    // Divide the canvas into 12
+    // Plot arbitrary values between 0-1
+    // Cross hatch
+    var numValues = 12 + 2;
+    var unitWidth = canvasWidth / numValues;
+    var radius = 4;
+    var prevHeight = 0;
+    
+    var values = [[0,canvasHeight]];
+    
+    for (var i = 1; i < numValues; ++i)
+    {
+      var randHeight = Math.random() * canvasHeight;
+      // Smooth
+      randHeight = (randHeight * 0.5) + (prevHeight * 0.5);
+      prevHeight = randHeight;
+
+      var x = unitWidth * i;
+      var y = canvasHeight - randHeight;
+      
+      values.push([x,y]);
+    }
+    
+    values.push([canvasWidth, canvasHeight]);
+
+    // Draw graph fill
+    context.fillStyle = $ColorScheme['headers'];
+    var prevPos = null;
+    for (var i = 0; i < values.length; ++i)
+    {
+      var pos = values[i];
+      if (prevPos)
+      {
+        context.beginPath();
+        context.moveTo(prevPos[0], prevPos[1]); // give the (x,y) coordinates
+        context.lineTo(pos[0]+1, pos[1]);
+        context.lineTo(pos[0]+1, canvasHeight);
+        context.lineTo(prevPos[0], canvasHeight);
+        context.fill();
+        context.closePath();
+      }
+      prevPos = pos;
+    }    
+    
+    // Draw graph lines
+    context.strokeStyle = $ColorScheme['background'];
+    var prevPos = null;
+    for (var i = 1; i < values.length - 1; ++i)
+    {
+      var pos = values[i];
+      if (prevPos)
+      {
+        context.beginPath();        
+        context.moveTo(prevPos[0], canvasHeight); // give the (x,y) coordinates
+        context.lineTo(pos[0], pos[1]);
+        context.stroke();
+        context.closePath();
+        
+        context.beginPath();        
+        context.moveTo(prevPos[0], prevPos[1]); // give the (x,y) coordinates
+        context.lineTo(pos[0], canvasHeight);
+        context.stroke();
+        context.closePath();
+      }
+      prevPos = pos;
+    } 
+    
+    // Draw graph points
+    context.fillStyle = $ColorScheme['headers_condensed'];
+    for (var i = 1; i < values.length - 1; ++i)
+    {
+        var pos = values[i];
+        context.beginPath();
+        context.arc(pos[0], pos[1], radius, 0, Math.PI*2, true); 
+        context.closePath();
+        context.fill();      
+    }        
+}
+
 function drawGraph()
 {
     var canvas = document.getElementById("fe_links_canvas");
@@ -368,19 +590,14 @@ function drawGraph()
     var canvasHeight = $(canvas).height() * 2;
     
     // Background color
-    context.fillStyle="rgba(255,255,255,0.5)";
+    context.fillStyle = $ColorScheme['background'];
     context.fillRect(0,0,canvasWidth,canvasHeight);
 
     var numDomain = $GraphNodes.length;
     var xInterval = canvasWidth / numDomain;
     var yInterval = canvasHeight / numDomain;
-    var prevX = 0;
-    var prevY = 0;
-    var firstX = 0;
-    var firstY = 0;
     
-    // Draw the lines
-    context.fillStyle = 'rgb(50,50,50)';    
+    // Position the nodes
     for (var i = 0; i < numDomain; ++i)
     {
         var node = $GraphNodes[i];        
@@ -397,6 +614,23 @@ function drawGraph()
         {
             node.vecY = node.vecY * -1;
         }
+    }
+    
+    // Draw the lines
+    
+    var prevX = 0;
+    var prevY = 0;
+    var firstX = 0;
+    var firstY = 0;
+    
+    //context.fillStyle = 'rgba(150,150,150,0.5)';
+    context.strokeStyle = $ColorScheme['graph_stroke'];//'rgba(50,50,50,0.5)';
+    
+    for (var i = 0; i < numDomain; ++i)
+    {
+        var node = $GraphNodes[i];        
+        var x = node.posX;
+        var y = node.posY;
                 
         if (!(prevX == 0 && prevY == 0))
         {
@@ -444,7 +678,7 @@ function drawGraph()
         var x = node.posX;
         var y = node.posY;                
     	context.font = 'normal 400 24px/2 Georgia, sans-serif';
-        context.fillStyle = '#dd4444';
+        context.fillStyle = $ColorScheme['graph_label']; //'#dd4444';
     	context.fillText(node['domain'], x + 8, y + 6);     
     }
                     
@@ -471,68 +705,7 @@ function updateTimer()
     $('#fe_clock')[0].innerHTML = outp;
 }
 
-function hslToRgb(h, s, l)
-{
-    var r, g, b;
-
-    if(s == 0){
-        r = g = b = l; // achromatic
-    }else{
-        function hue2rgb(p, q, t){
-            if(t < 0) t += 1;
-            if(t > 1) t -= 1;
-            if(t < 1/6) return p + (q - p) * 6 * t;
-            if(t < 1/2) return q;
-            if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-            return p;
-        }
-
-        var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-        var p = 2 * l - q;
-        r = hue2rgb(p, q, h + 1/3);
-        g = hue2rgb(p, q, h);
-        b = hue2rgb(p, q, h - 1/3);
-    }
-
-    return [r * 255, g * 255, b * 255];
-}
-
-function rgbToHsl(r, g, b)
-{
-    r /= 255, g /= 255, b /= 255;
-    var max = Math.max(r, g, b), min = Math.min(r, g, b);
-    var h, s, l = (max + min) / 2;
-
-    if(max == min){
-        h = s = 0; // achromatic
-    }else{
-        var d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch(max){
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-            case g: h = (b - r) / d + 2; break;
-            case b: h = (r - g) / d + 4; break;
-        }
-        h /= 6;
-    }
-
-    return [h, s, l];
-}
-
-
-var $SortMode = 1; // 0 hue 1 sat 2 lightness
-function setRenderModeClient()
-{
-    var sortVal = $.grep($("[name=render_mode]"), function(a){return a.checked;})[0].value;
-    setRenderMode(sortVal * 1);
-}
-
-function setRenderMode(mode)
-{
-    $SortMode = mode * 1;
-}
-
-function addExtCSS()
+function addExternalCSS()
 {
     var cssId = 'feltronCss';  // you could encode the css path itself to generate id..
     if (!document.getElementById(cssId))
@@ -548,109 +721,16 @@ function addExtCSS()
     }    
 }
 
-
-function sortColors(pixelData)
+function appendStyles(styleContent, styleID)
 {
-    var hslArr = new Array();
-    for (var i = 0; i < pixelData.length; i+=4)
-    {        
-        var rgbColor = [pixelData[i + 0], 
-                        pixelData[i + 1],
-                        pixelData[i + 2]];
-        hslArr.push(rgbToHsl(rgbColor[0], rgbColor[1], rgbColor[2]));
-    }
-    
-    var sortedHslArr = hslArr.sort( function(a, b)
+    var prevStyle = document.getElementById(styleID);
+    if (prevStyle)
     {
-        var primarySortMode = $SortMode;
-        var secondarySortMode = -1;
-        var primaryMulti = 1;
-        var secondaryMulti = 1;
-        if ($SortMode == 0)
-        {
-            secondarySortMode = 2;                 
-        }
-        else if ($SortMode == 1)
-        {
-            // Not bad:
-            secondarySortMode = 2;                 
-        }
-        else if ($SortMode == 2)
-        {
-            // Very nice:
-            // secondarySortMode = 0;
-            // Also nice:
-            // secondarySortMode = 1;
-            // The best
-            secondarySortMode = 2;
-        }
-        else if ($SortMode == 3)
-        {
-            primarySortMode = 0;
-            secondarySortMode = 2;     
-            secondaryMulti = -1;       
-        }
-        else if ($SortMode == 4)
-        {
-            primarySortMode = 2;
-            secondarySortMode = 0;
-        }
-        else if ($SortMode == 5)
-        {
-            primarySortMode = 1;
-            secondarySortMode = 0;
-        }
-        else if ($SortMode == 6)
-        {
-            primarySortMode = 1;
-            secondarySortMode = 2;
-        }
-        if(a[primarySortMode] > b[primarySortMode])
-        {
-            return 1 * primaryMulti;
-        }
-        else if (a[primarySortMode] < b[primarySortMode])
-        {
-            return -1 * primaryMulti;
-        }
-        else 
-        {
-            // Sub-sorting
-            if (secondarySortMode != -1)
-            {
-                if(a[secondarySortMode] > b[secondarySortMode])
-                {
-                    return 1 * secondaryMulti;
-                }
-                else if(a[secondarySortMode] < b[secondarySortMode])
-                {
-                    return -1 * secondaryMulti;
-                }
-                else
-                {
-                    return 0;
-                }
-            }
-            return 0;
-        }
-    });
-
-    var sortedRGB = [];
-    for (var i = 0; i < sortedHslArr.length; ++i)
-    {
-        var hsl = sortedHslArr[i];
-        var rgb = hslToRgb(hsl[0],hsl[1],hsl[2])
-        rgb.push(255);
-        sortedRGB.push(rgb);
+        prevStyle.parentNode.removeChild(prevStyle);
     }
-    
-    return sortedRGB;
-}
-
-function appendStyles(styleContent)
-{
-    var styleNode           = document.createElement ("style");
+    var styleNode           = document.createElement("style");
     styleNode.type          = "text/css";
+    styleNode.id            = styleID;
     styleNode.textContent   = styleContent;
     document.head.appendChild (styleNode);
 }
@@ -721,23 +801,27 @@ function pickStyle()
     background-color:"+$ColorScheme['background']+" !important; \
     color:"+$ColorScheme['text']+" !important; \
 } \
-    #feltron_ext h1, #feltron_ext h2, #feltron_ext h3, #feltron_ext h4, #feltron_ext h5, #feltron_ext h6 \
+    #feltron_ext h2, #feltron_ext h3, #feltron_ext h4, #feltron_ext h5, #feltron_ext h6 \
 { \
     color:"+$ColorScheme['headers']+" !important; \
 } \
-    #feltron_ext .highlight \
+    #feltron_ext h1, #fe_clock, #feltron_ext h1.condensed, #feltron_ext h2.condensed, #feltron_ext h3.condensed, #feltron_ext h4.condensed, #feltron_ext h5.condensed, #feltron_ext h6.condensed \
+{ \
+    color:"+$ColorScheme['headers_condensed']+" !important; \
+} \
+    #feltron_ext .highlight, #feltron_ext .fe_pageTag \
 { \
     background-color:"+$ColorScheme['highlight']+" !important; \
 } \
+    #feltron_ext .fe_pageTag \
+{ \
+    color:"+$ColorScheme['page_tag']+" !important; \
+} \
 ";
-    appendStyles(colorStyle);
+    appendStyles(colorStyle, 'fe_color_scheme');
 }
 
 $("document").ready(function()
 {
-    pickStyle();
-    log("Feltron Loaded");
-    
+    log("Feltron Loaded");    
 });
-
-// NOTE: Once we scroll, remove the image
