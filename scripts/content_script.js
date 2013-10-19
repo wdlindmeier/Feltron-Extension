@@ -3,11 +3,19 @@
 function log(msg)
 {
     console.log(msg);
-    //chrome.extension.getBackgroundPage().console.log(msg);
 }
+
+var COLORS = 
+[
+    // Black / White 
+    { background : "#ffffff", text : "#000000", headers : "#000000",  highlight : "#00ffff", graph_node : "rgba(50,50,50,1)", graph_label : "#dd4444" }
+];
+
+var $ColorScheme = COLORS[Math.random() * COLORS.length];
 
 var $TimeLoaded = new Date();
 var $TimerClock = null;
+var $TimerDraw = null;
 
 var $NumUniqueWords = 0;
 var $NumUniqueTags = 0;
@@ -18,6 +26,8 @@ var $NumUniqueDomains = 0;
 var $SortedPageWords = null;
 var $SortedPageTags = null;
 var $SortedLinkDomains = null;
+
+var $LinkDomainCounts = null;
 
 var $PageTagCounts = null;
 
@@ -37,7 +47,6 @@ var $PageDomain = "";
 var $PopoverHTML = "";
 
 // Scratch containers for recursive function
-var linkDomainCounts = {};
 var linkDomains = [];
 var pageTagCounts = {};
 var pageTags = [];
@@ -65,13 +74,13 @@ function mineTag(parentTag)
             if (link.indexOf("http") != -1)
             {
                 var domain = link.split("/")[2].replace("www.", ""); // (http:)/()/(www.google.com)/q
-                var domainCount = linkDomainCounts[domain];
+                var domainCount = $LinkDomainCounts[domain];
                 if (!domainCount)
                 {
                     linkDomains.push(domain);
                     domainCount = 0;
                 }
-                linkDomainCounts[domain] = domainCount + 1;
+                $LinkDomainCounts[domain] = domainCount + 1;
             }            
         }
         else if (tagName == "SCRIPT")
@@ -133,7 +142,6 @@ function mineTag(parentTag)
 
 function clearScratch()
 {
-    linkDomainCounts = {};
     linkDomains = [];
     pageTagCounts = {};
     pageTags = [];
@@ -146,12 +154,14 @@ function analyzePage()
     clearScratch();
     
     clearInterval($TimerClock);    
+    clearInterval($TimerDraw);
     
     $NumJavascriptFiles = 0;
     $NumCSSFiles = 0;
     $JavaScriptFilenames = [];
     $CSSFilenames = [];
     $PopoverHTML = "";
+    $LinkDomainCounts = {};
     
     mineTag($("*"));
 
@@ -176,11 +186,11 @@ function analyzePage()
     // Links
     linkDomains.sort(function(a,b)
     {
-       if(linkDomainCounts[a] < linkDomainCounts[b])
+       if($LinkDomainCounts[a] < $LinkDomainCounts[b])
        {
            return 1;
        }
-       else if(linkDomainCounts[a] > linkDomainCounts[b])
+       else if($LinkDomainCounts[a] > $LinkDomainCounts[b])
        {
            return -1;
        }
@@ -212,7 +222,8 @@ function analyzePage()
         var word = $SortedPageWords[i];
         if ($StopWords.indexOf(word) == -1)
         {
-            if ($InterestingWords.length < $NumInterestingWords)
+            if (word.length >= 3 &&
+                $InterestingWords.length < $NumInterestingWords)
             {   
                 $InterestingWords.push(word)
             }
@@ -239,7 +250,7 @@ function analyzePage()
     $PopoverHTML += "</header>";
 
 
-    $PopoverHTML += '<div id="fe_graph"> <h3>Links</h3> <div id="fe_links_placeholder"></div></div>';
+    $PopoverHTML += '<div id="fe_graph"> <h3>Links</h3> <canvas id="fe_links_canvas" width="2200" height="600"></canvas></div>';
     
     $PopoverHTML += '<ul id="fe_details">';
 
@@ -291,9 +302,152 @@ function analyzePage()
     $PopoverHTML += '</div>'; // fe_details
     $PopoverHTML += "</div>"; // feltron_ext
     
+    document.body.innerHTML += $PopoverHTML;
+    
+    createGraphData();
+    
+    $TimerDraw = setInterval(function(){
+        drawGraph();
+    }, 50);
+    
     $TimerClock = setInterval(function(){
         updateTimer();
-    }, 1000)
+    }, 1000);
+}
+
+$GraphNodes = [];
+$GraphMarginRight = 300;
+
+function createGraphData()
+{
+    var canvas = document.getElementById("fe_links_canvas");
+    var canvasWidth = $(canvas).width() * 2;
+    var canvasHeight = $(canvas).height() * 2;
+    
+    var minCount = 99999;
+    var maxCount = 20; // Set a default max
+    for (var key in $LinkDomainCounts)
+    {
+        var count = $LinkDomainCounts[key];
+        if (minCount > count)
+        {
+            minCount = count;
+        }
+        if (maxCount < count)
+        {
+            maxCount = count;
+        }
+    }
+    
+    var numDomain = $SortedLinkDomains.length;
+    for (var i = 0; i < numDomain; ++i)
+    {
+        var node = {};
+        node.domain = $SortedLinkDomains[i];
+        // TODO: Normalize the sizes w/ max, min
+        var linkCount = $LinkDomainCounts[node.domain];
+        var scalarSize = (linkCount - minCount) / (maxCount - minCount);        
+        node.radius = 6 + (100 * scalarSize);
+        node.color = "rgba(50,50,50,1)";
+        node.posX = node.radius + (Math.random() * (canvasWidth - $GraphMarginRight - (node.radius * 2)));
+        node.posY = node.radius + (Math.random() * (canvasHeight - (node.radius * 2)));
+        
+        node.vecX = (Math.random() - 0.5) * 3;
+        node.vecY = (Math.random() - 0.5) * 3;
+        
+        $GraphNodes.push(node);
+    }
+    // console.log("$GraphNodes.length " + $GraphNodes.length);
+}
+
+function drawGraph()
+{
+    var canvas = document.getElementById("fe_links_canvas");
+    var context = canvas.getContext("2d");
+    var canvasWidth = $(canvas).width() * 2;
+    var canvasHeight = $(canvas).height() * 2;
+    
+    // Background color
+    context.fillStyle="rgba(255,255,255,0.5)";
+    context.fillRect(0,0,canvasWidth,canvasHeight);
+
+    var numDomain = $GraphNodes.length;
+    var xInterval = canvasWidth / numDomain;
+    var yInterval = canvasHeight / numDomain;
+    var prevX = 0;
+    var prevY = 0;
+    var firstX = 0;
+    var firstY = 0;
+    
+    // Draw the lines
+    context.fillStyle = 'rgb(50,50,50)';    
+    for (var i = 0; i < numDomain; ++i)
+    {
+        var node = $GraphNodes[i];        
+        var x = node.posX;
+        var y = node.posY;
+
+        node.posX += node.vecX;
+        node.posY += node.vecY;
+        if (node.posX < node.radius || node.posX > (canvasWidth - $GraphMarginRight - node.radius))
+        {
+            node.vecX = node.vecX * -1;
+        }
+        if (node.posY < node.radius || node.posY > (canvasHeight - node.radius))
+        {
+            node.vecY = node.vecY * -1;
+        }
+                
+        if (!(prevX == 0 && prevY == 0))
+        {
+            context.beginPath();
+            context.moveTo(prevX, prevY);
+            context.lineTo(x, y);
+            context.stroke();
+        }
+        else 
+        {
+            firstX = x;
+            firstY = y;
+        }
+        
+        prevX = x;
+        prevY = y;                    
+    }
+
+    // Draw the last line    
+    context.beginPath();
+    context.moveTo(prevX, prevY);
+    context.lineTo(firstX, firstY);
+    context.stroke();
+    
+    // Draw the nodes
+    for (var i = 0; i < numDomain; ++i)
+    {
+        var node = $GraphNodes[i];        
+        var x = node.posX;
+        var y = node.posY;
+                
+        var radius = node['radius'];
+        context.fillStyle = node.color;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI*2, true); 
+        context.closePath();
+        context.fill();
+        
+    }
+        
+    // Draw the names
+    for (var i = 0; i < numDomain; ++i)
+    {
+        var node = $GraphNodes[i];        
+        var x = node.posX;
+        var y = node.posY;                
+    	context.font = 'normal 400 24px/2 Georgia, sans-serif';
+        context.fillStyle = '#dd4444';
+    	context.fillText(node['domain'], x + 8, y + 6);     
+    }
+                    
 }
 
 function updateTimer()
@@ -493,83 +647,12 @@ function sortColors(pixelData)
     return sortedRGB;
 }
 
-function handleImage(imageDataURI)
-{
-    log("Image:");
-    log(imageDataURI);
-    
-    log($PopoverHTML);
-    document.body.innerHTML += $PopoverHTML;
-    
-    return;
-
-    var img = document.createElement("img");
-    img.src = imageDataURI;
-
-    var top = $(document).scrollTop();
-    var left = $(document).scrollLeft(); //img.width / 2;
-    
-    var canvas = document.createElement("canvas");
-    canvas.width = img.width;
-    canvas.height = img.height;
-    canvas.setAttribute("style", "position:absolute;top:"+top+"px;left:"+left+"px;z-index:999999;width:"+(canvas.width/2)+"px;height:"+(canvas.height/2)+"px;");
-    document.body.appendChild(canvas);
-    var context = canvas.getContext('2d');
-    context.drawImage(img, 0, 0, img.width, img.height);
-    
-    //return;
-    
-    // Now apply filter
-    var imageData = context.getImageData(0, 0, img.width, img.height);
-    var data = imageData.data;
-
-    // Invert
-    /*
-    for(var i = 0; i < data.length; i += 4) 
-    {
-      // red
-      data[i] = 255 - data[i];
-      // green
-      data[i + 1] = 255 - data[i + 1];
-      // blue
-      data[i + 2] = 255 - data[i + 2];
-    }
-    */
-
-    var sortedColors = sortColors(data);
-    for(var i = 0; i < data.length/4; i++) 
-    {
-      data[i*4] = sortedColors[i][0];
-      data[i*4 + 1] = sortedColors[i][1];
-      data[i*4 + 2] = sortedColors[i][2];
-      data[i*4 + 3] = sortedColors[i][3];
-    }
-    
-    // overwrite original image
-    context.putImageData(imageData, 0, 0);
-    
-}
-
-function appendFontWithURL(fontName)
+function appendStyles(styleContent)
 {
     var styleNode           = document.createElement ("style");
     styleNode.type          = "text/css";
-    styleNode.textContent   = "@font-face { font-family: 'Extension "+fontName+"'; src: url('"
-                            + chrome.extension.getURL (fontName)
-                            + "'); }"
-                            ;
+    styleNode.textContent   = styleContent;
     document.head.appendChild (styleNode);
-    /*
-    console.log("Appending child: " + fontURL);
-    var css = " \
-    @font-face { \
-      font-family: 'Extension Poster Sans Bold'; \
-      src: url('chrome-extension://__MSG_@@extension_id__/PosterSansBold.ttf'); \
-    }";
-    var style = document.createElement('style');
-    style.innerHTML = css;
-    document.body.appendChild(style);
-    */
 }
 
 function convertNum(inp, end)
@@ -630,11 +713,31 @@ function convertNum(inp, end)
     return str;
 }
 
+function pickStyle()
+{
+    var colorStyle = " \
+#feltron_ext \
+{ \
+    background-color:"+$ColorScheme['background']+" !important; \
+    color:"+$ColorScheme['text']+" !important; \
+} \
+    #feltron_ext h1, #feltron_ext h2, #feltron_ext h3, #feltron_ext h4, #feltron_ext h5, #feltron_ext h6 \
+{ \
+    color:"+$ColorScheme['headers']+" !important; \
+} \
+    #feltron_ext .highlight \
+{ \
+    background-color:"+$ColorScheme['highlight']+" !important; \
+} \
+";
+    appendStyles(colorStyle);
+}
+
 $("document").ready(function()
 {
-//    appendFontWithURL("PosterSansBold.otf");
-//    appendFontWithURL("GothamBold.otf");
+    pickStyle();
     log("Feltron Loaded");
+    
 });
 
 // NOTE: Once we scroll, remove the image

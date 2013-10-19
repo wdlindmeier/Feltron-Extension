@@ -38,9 +38,9 @@ function feltronize()
        console.log(image);
        
        chrome.tabs.executeScript(null,
-       {
-         //code:"document.body.style.backgroundColor='red'"
-         code:"analyzePage(); handleImage(\""+image.toString()+"\")"
+       {           
+         // handleImage(\""+image.toString()+"\")
+         code:"analyzePage();" // 
        }, function()
        {
            document.getElementById('status').innerHTML = "Feltronyzed!";
