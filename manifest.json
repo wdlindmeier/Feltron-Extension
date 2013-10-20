@@ -15,7 +15,6 @@
         {
             "matches": [
                 "http://*/*",
-                "file://*/*",                
                 "https://*/*"
             ],
             "css" : [
@@ -34,9 +33,7 @@
         "tabs",
         "webRequest",
         "http://*/*",
-        "file://*/*",
         "https://*/*",
         "http://localhost/*"
-    ],
-    "update_url": "http://path/to/updateInfo.xml"
+    ]
 }

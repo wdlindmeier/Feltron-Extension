@@ -24,9 +24,13 @@
 footer, #feltron_ext header, #feltron_ext hgroup, #feltron_ext menu, #feltron_ext nav, #feltron_ext section {
 	display: block;
 }
-body#feltron_ext {
+
+body #feltron_ext 
+{
 	line-height: 1;
+    font-size:14px;
 }
+
 #feltron_ext ol, #feltron_ext ul {
 	list-style: none;
 }
